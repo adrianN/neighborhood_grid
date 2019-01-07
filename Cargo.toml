@@ -1,0 +1,12 @@
+[package]
+name = "neighborhood_matrix"
+version = "0.1.0"
+authors = ["Adrian Neumann <adrian_neumann@gmx.de>"]
+edition = "2018"
+
+[dependencies]
+permutohedron = "0.2.*"
+rand = "*"
+
+[profile.release]
+debug = true
