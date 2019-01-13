@@ -142,7 +142,7 @@ fn main() {
                         *c = min(*c, m);
                         m = *c;
                     }
-                    println!("Permutation {:?}, count {}", p, m);
+                    println!("Permutation {:?}{:?}, count {}", prefix,p, m);
                 }
             }
         }));
