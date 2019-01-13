@@ -137,12 +137,12 @@ fn main() {
                 }
                 if new_m <= m {
                     m = new_m;
+                    println!("Permutation {:?}{:?}, count {}", prefix,p, m);
                     {
                         let mut c = cutoff.lock().unwrap();
                         *c = min(*c, m);
                         m = *c;
                     }
-                    println!("Permutation {:?}{:?}, count {}", prefix,p, m);
                 }
             }
         }));
