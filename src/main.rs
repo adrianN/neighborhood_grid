@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 
 const NUMBER_OF_ELEMENTS: usize = 4;
 
-fn fits(prefix: &[usize], v: &[usize], pos: usize, matrix: &mut [usize], spot: usize) -> bool {
+fn fits(v: &[usize], pos: usize, matrix: &mut [usize], spot: usize) -> bool {
     if spot == 0 {
         return true;
     }
@@ -23,23 +23,18 @@ fn fits(prefix: &[usize], v: &[usize], pos: usize, matrix: &mut [usize], spot: u
         true
     } else {
         let m_pos = matrix[spot - NUMBER_OF_ELEMENTS];
-        let l_value = if pos >= prefix.len() {
-            v[pos - prefix.len()]
-        } else {
-            prefix[pos]
-        };
-        let r_value = if m_pos >= prefix.len() {
-            v[m_pos - prefix.len()]
-        } else {
-            prefix[m_pos]
-        };
+        let l_value = 
+            v[pos]
+        ;
+        let r_value = 
+            v[m_pos]
+        ;
         l_value > r_value
     };
     row_ok && column_ok
 }
 
 fn fill_rec(
-    prefix: &[usize],
     v: &[usize],
     chosen: &mut [bool],
     matrix: &mut [usize],
@@ -48,15 +43,15 @@ fn fill_rec(
 ) -> u64 {
     let mut count: u64 = 0;
     let mut done = 0;
-    for i in 0..(prefix.len() + v.len()) {
+    for i in 0..v.len() {
         if chosen[i] {
             done += 1;
             continue;
         }
-        if fits(prefix, v, i, matrix, spot) {
+        if fits(v, i, matrix, spot) {
             chosen[i] = true;
             matrix[spot] = i;
-            count = count.saturating_add(fill_rec(prefix, v, chosen, matrix, cutoff, spot + 1));
+            count = count.saturating_add(fill_rec(v, chosen, matrix, cutoff, spot + 1));
             if count > cutoff {
                 return u64::max_value();
             }
@@ -82,11 +77,10 @@ fn main() {
     {
         let mut chosen = [false; NUMBER_OF_ELEMENTS * NUMBER_OF_ELEMENTS];
         let mut rng = rand::thread_rng();
-        let prefix = [];
         let mut now = Instant::now();
         for i in 0..100000 {
             v.shuffle(&mut rng);
-            let new_m = fill_rec(&prefix, &v, &mut chosen, &mut matrix, m, 0);
+            let new_m = fill_rec(&v, &mut chosen, &mut matrix, m, 0);
             for i in 0..chosen.len() {
                 chosen[i] = false;
             }
@@ -118,6 +112,7 @@ fn main() {
             let mut count = 0;
             let mut prev_count = 0;
             let mut now = Instant::now();
+            let mut x = [0; NUMBER_OF_ELEMENTS * NUMBER_OF_ELEMENTS];
             for p in heap {
                 count += 1;
                 if count % 1000 == 0 {
@@ -131,13 +126,24 @@ fn main() {
                         prev_count = count;
                     }
                 }
-                let new_m = fill_rec(&prefix, &p, &mut chosen, &mut matrix, m, 0);
+                {
+                    let mut i = 0;
+                    for j in prefix.into_iter() {
+                        x[i] = *j;
+                        i += 1;
+                    }
+                    for j in p.into_iter(){
+                        x[i] = j;
+                        i+=1;
+                    }
+                }
+                let new_m = fill_rec(&x, &mut chosen, &mut matrix, m, 0);
                 for i in 0..chosen.len() {
                     chosen[i] = false;
                 }
                 if new_m <= m {
                     m = new_m;
-                    println!("Permutation {:?}{:?}, count {}", prefix,p, m);
+                    println!("Permutation {:?}, count {}", x, m);
                     {
                         let mut c = cutoff.lock().unwrap();
                         *c = min(*c, m);
