@@ -5,6 +5,7 @@ use rand::seq::SliceRandom;
 use std::cmp::min;
 use std::sync::{Arc, Mutex};
 use std::thread;
+use std::time::{Duration, Instant};
 
 const NUMBER_OF_ELEMENTS: usize = 4;
 
@@ -82,7 +83,8 @@ fn main() {
         let mut chosen = [false; NUMBER_OF_ELEMENTS * NUMBER_OF_ELEMENTS];
         let mut rng = rand::thread_rng();
         let prefix = [];
-        for _i in 0..1000000 {
+        let mut now = Instant::now();
+        for i in 0..100000 {
             v.shuffle(&mut rng);
             let new_m = fill_rec(&prefix, &v, &mut chosen, &mut matrix, m, 0);
             for i in 0..chosen.len() {
@@ -90,14 +92,20 @@ fn main() {
             }
             if new_m <= m {
                 m = new_m;
-                //println!("Permutation {:?}, count {}", v, m);
+                println!("Permutation {:?}, count {}", v, m);
+            }
+            let new_now = Instant::now();
+            if new_now.duration_since(now) > Duration::new(30,0) {
+                println!("Preprocess {}", i);
+                now = new_now
             }
         }
     }
+    println!("Random sampling phase done");
     let cutoff = Arc::new(Mutex::new(m));
 
     let mut threads = Vec::new();
-    for _i in 0..v.len() {
+    for i in 0..v.len() {
         v.rotate_left(1);
         let cutoff = cutoff.clone();
         let mut u = v.clone();
@@ -108,11 +116,20 @@ fn main() {
             let heap = Heap::new(&mut u[1..]);
 
             let mut count = 0;
+            let mut prev_count = 0;
+            let mut now = Instant::now();
             for p in heap {
                 count += 1;
-                if count > 1000000 {
-                    count = 0;
-                    m = min(m, *cutoff.lock().unwrap());
+                if count % 1000 == 0 {
+                    let new_now = Instant::now();
+                    if new_now.duration_since(now) > Duration::new(5*60,0) {
+                        {
+                            m = min(m, *cutoff.lock().unwrap());
+                        }
+                        println!("Thread {} at {}, {}/s", i,count, (count-prev_count) as f32 / new_now.duration_since(now).as_secs() as f32 );
+                        now = new_now;
+                        prev_count = count;
+                    }
                 }
                 let new_m = fill_rec(&prefix, &p, &mut chosen, &mut matrix, m, 0);
                 for i in 0..chosen.len() {
@@ -120,10 +137,12 @@ fn main() {
                 }
                 if new_m <= m {
                     m = new_m;
+                    {
+                        let mut c = cutoff.lock().unwrap();
+                        *c = min(*c, m);
+                        m = *c;
+                    }
                     println!("Permutation {:?}, count {}", p, m);
-                    let mut c = cutoff.lock().unwrap();
-                    *c = min(*c, m);
-                    m = *c;
                 }
             }
         }));
