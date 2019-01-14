@@ -10,20 +10,11 @@ use std::time::{Duration, Instant};
 const NUMBER_OF_ELEMENTS: usize = 4;
 
 fn fits(v: &[usize], pos: usize, matrix: &mut [usize], spot: usize) -> bool {
-    if spot == 0 {
-        return true;
-    }
-    let column = (spot) % NUMBER_OF_ELEMENTS;
-    let row_ok = if column == 0 {
-        true
-    } else {
-        matrix[spot - 1] < pos
-    };
     let column_ok = if spot < NUMBER_OF_ELEMENTS {
         true
     } else {
         let m_pos = matrix[spot - NUMBER_OF_ELEMENTS];
-        let l_value = 
+        let l_value =
             v[pos]
         ;
         let r_value = 
@@ -31,7 +22,17 @@ fn fits(v: &[usize], pos: usize, matrix: &mut [usize], spot: usize) -> bool {
         ;
         l_value > r_value
     };
-    row_ok && column_ok
+    if column_ok {
+        let column = (spot) % NUMBER_OF_ELEMENTS;
+        let row_ok = if column == 0 {
+            true
+        } else {
+            matrix[spot - 1] < pos
+        };
+        row_ok
+    } else {
+        false
+    }
 }
 
 fn fill_rec(
@@ -42,27 +43,25 @@ fn fill_rec(
     spot: usize,
 ) -> u64 {
     let mut count: u64 = 0;
-    let mut done = 0;
-    for i in 0..v.len() {
+    for i in 0..chosen.len() {
         if chosen[i] {
-            done += 1;
             continue;
         }
         if fits(v, i, matrix, spot) {
-            chosen[i] = true;
-            matrix[spot] = i;
-            count = count.saturating_add(fill_rec(v, chosen, matrix, cutoff, spot + 1));
+            if spot+1 >= NUMBER_OF_ELEMENTS * NUMBER_OF_ELEMENTS {
+                count = count + 1;
+            } else {
+                chosen[i] = true;
+                matrix[spot] = i;
+                count = count.saturating_add(fill_rec(v, chosen, matrix, cutoff, spot + 1));
+                chosen[i] = false;
+            }
             if count > cutoff {
                 return u64::max_value();
             }
-            chosen[i] = false;
         }
     }
-    if done == chosen.len() {
-        1
-    } else {
-        count
-    }
+    count
 }
 fn main() {
     let mut v: [usize; NUMBER_OF_ELEMENTS * NUMBER_OF_ELEMENTS] =
@@ -113,6 +112,7 @@ fn main() {
             let mut prev_count = 0;
             let mut now = Instant::now();
             let mut x = [0; NUMBER_OF_ELEMENTS * NUMBER_OF_ELEMENTS];
+            x[0] = prefix[0];
             for p in heap {
                 count += 1;
                 if count % 1000 == 0 {
@@ -126,17 +126,7 @@ fn main() {
                         prev_count = count;
                     }
                 }
-                {
-                    let mut i = 0;
-                    for j in prefix.into_iter() {
-                        x[i] = *j;
-                        i += 1;
-                    }
-                    for j in p.into_iter(){
-                        x[i] = j;
-                        i+=1;
-                    }
-                }
+                x[1..].clone_from_slice(&p);
                 let new_m = fill_rec(&x, &mut chosen, &mut matrix, m, 0);
                 for i in 0..chosen.len() {
                     chosen[i] = false;
