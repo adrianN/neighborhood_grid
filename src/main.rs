@@ -1,5 +1,6 @@
 extern crate permutohedron;
 extern crate rand;
+extern crate num_cpus;
 use permutohedron::Heap;
 use rand::seq::SliceRandom;
 use std::cmp::min;
@@ -69,35 +70,64 @@ fn main() {
     for i in 0..NUMBER_OF_ELEMENTS * NUMBER_OF_ELEMENTS {
         v[i] = i;
     }
-    println!("{:?}", v);
     let mut matrix: [usize; NUMBER_OF_ELEMENTS * NUMBER_OF_ELEMENTS] =
         [0; NUMBER_OF_ELEMENTS * NUMBER_OF_ELEMENTS];
-    let mut m = u64::max_value();
-    {
-        let mut chosen = [false; NUMBER_OF_ELEMENTS * NUMBER_OF_ELEMENTS];
-        let mut rng = rand::thread_rng();
-        let mut now = Instant::now();
-        for i in 0..100000 {
-            v.shuffle(&mut rng);
-            let new_m = fill_rec(&v, &mut chosen, &mut matrix, m, 0);
-            for i in 0..chosen.len() {
-                chosen[i] = false;
-            }
-            if new_m <= m {
-                m = new_m;
-                println!("Permutation {:?}, count {}", v, m);
-            }
-            let new_now = Instant::now();
-            if new_now.duration_since(now) > Duration::new(30,0) {
-                println!("Preprocess {}", i);
-                now = new_now
-            }
-        }
-    }
-    println!("Random sampling phase done");
-    let cutoff = Arc::new(Mutex::new(m));
 
     let mut threads = Vec::new();
+    let mut m = u64::max_value();
+    let cutoff = Arc::new(Mutex::new(m));
+    {
+        let cpus = num_cpus::get();
+        for _i in 0..cpus {
+            let cutoff = cutoff.clone();
+            threads.push(thread::spawn(move || {
+                let mut m = u64::max_value();
+                let mut v = v.clone();
+                let mut chosen = [false; NUMBER_OF_ELEMENTS * NUMBER_OF_ELEMENTS];
+                let mut rng = rand::thread_rng();
+                let mut now = Instant::now();
+                for i in 0..(100000/cpus) {
+                    if i % 100 == 0 {
+                        let new_now = Instant::now();
+                        if new_now.duration_since(now) > Duration::new(5*60,0) {
+                            {
+                                m = min(m, *cutoff.lock().unwrap());
+                            }
+                            now = new_now;
+                        }
+                    }
+                    v.shuffle(&mut rng);
+                    let new_m = fill_rec(&v, &mut chosen, &mut matrix, m, 0);
+                    for i in 0..chosen.len() {
+                        chosen[i] = false;
+                    }
+                    if new_m <= m {
+                        m = new_m;
+                        println!("Permutation {:?}, count {}", v, m);
+                        {
+                            let mut c = cutoff.lock().unwrap();
+                            *c = min(*c, m);
+                            m = *c;
+                        }
+                    }
+                    let new_now = Instant::now();
+                    if new_now.duration_since(now) > Duration::new(30,0) {
+                        println!("Preprocess {}", i);
+                        now = new_now
+                    }
+                }
+                {
+                    let mut c = cutoff.lock().unwrap();
+                    *c = min(*c, m);
+                }
+            }));
+        }
+    }
+    for t in threads.drain(0..) {
+        t.join().unwrap();
+    }
+    println!("Random sampling phase done");
+
     for i in 0..v.len() {
         v.rotate_left(1);
         let cutoff = cutoff.clone();
@@ -143,7 +173,7 @@ fn main() {
             }
         }));
     }
-    for t in threads {
+    for t in threads.drain(0..) {
         t.join().unwrap();
     }
 }
